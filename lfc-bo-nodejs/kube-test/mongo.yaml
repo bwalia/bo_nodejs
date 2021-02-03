@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mongo-#SERVICE_CODE#-pvc
+  name: mongo-pvc
 spec:
   accessModes:
     - ReadWriteOnce
@@ -12,10 +12,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: mongo-#SERVICE_CODE#
+  name: mongo
 spec:
   selector:
-    app: mongo-#SERVICE_CODE#
+    app: mongo
   ports:
     - port: 27017
       targetPort: 27017
@@ -23,15 +23,15 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mongo-#SERVICE_CODE#
+  name: mongo
 spec:
   selector:
     matchLabels:
-      app: mongo-#SERVICE_CODE#
+      app: mongo
   template:
     metadata:
       labels:
-        app: mongo-#SERVICE_CODE#
+        app: mongo
     spec:
       containers:
         - name: mongo
@@ -44,4 +44,4 @@ spec:
       volumes:
         - name: storage
           persistentVolumeClaim:
-            claimName: mongo-#SERVICE_CODE#-pvc
+            claimName: mongo-pvc

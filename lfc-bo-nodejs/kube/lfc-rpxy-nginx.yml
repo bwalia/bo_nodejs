@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-lfc-#SERVICE_CODE#
+data:
+  nginx-http: |
+    user nginx;
+    worker_processes  1;
+    error_log  /var/log/nginx/error.log;
+    events {
+      worker_connections  1024;
+    }
+    http {
+      log_format  main
+              'remote_addr:$remote_addr\t'
+              'time_local:$time_local\t'
+              'method:$request_method\t'
+              'uri:$request_uri\t'
+              'host:$host\t'
+              'status:$status\t'
+              'bytes_sent:$body_bytes_sent\t'
+              'referer:$http_referer\t'
+              'useragent:$http_user_agent\t'
+              'forwardedfor:$http_x_forwarded_for\t'
+              'request_time:$request_time';
+      access_log	/var/log/nginx/access.log main;
+      access_log        off;
+      proxy_cache_path	/tmp/cache levels=1:2 keys_zone=STATIC_FILES_CACHE:8m max_size=1000m inactive=600m;
+      proxy_temp_path	/tmp/cache/tmp;
+      server {
+          listen       81 default_server;
+          listen       [::]:81 default_server;
+          server_name _;
+              location /
+              {
+          return 301 https://$host$request_uri;
+          	  }	
+             }
+      server {
+          listen       80 default_server;
+          listen       [::]:80 default_server;
+          server_name  default.lfc.mobiguider.cloud _;
+          index index-lfc.html;
+            location ~ \.php$ {
+            deny all;
+            }
+            location /
+            {
+            limit_except GET {
+            deny all;
+            }
+          resolver 8.8.8.8;
+          #add_header X-Asset-Hostname $hostname;
+          #add_header X-Asset-Host $host;
+          set $bucket "eks-nginx-public";
+          set $region "us-east-2";
+          proxy_pass_request_headers off;
+          # let amazon take the buffering load
+          proxy_buffering off;
+          # let amazon retry a few times if first timeouts are 5xx response
+          proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
+          proxy_set_header Host $bucket.s3-$region.amazonaws.com;
+          proxy_hide_header "x-amz-id-2";
+          proxy_hide_header "x-amz-request-id";
+          rewrite ^(.*)/$ $1/index-lfc.html break;
+          rewrite ^(.*/[^./]+)$ $1/index-lfc.html break;
+          proxy_pass http://$bucket.s3-$region.amazonaws.com;
+          break;
+          }
+      }
+      include /etc/nginx/clients/*.conf;
+        }
+  clients-shared: |
+        client_max_body_size 10M; # set client body size to 2M #
+        set $no_cache "";
+        if ($request_method !~ ^(GET|HEAD)$) {
+        set $no_cache "1";
+        }
+        if ($request_filename ~* ^.+.(svg|SVG|swf|jpg|jpeg|gif|css|png|js|ico|zip|exe|dmg|MOV|mov|woff|woff2|ttf|txt)$) {
+         set $no_cache "";
+        }
+        location ~ \.php$ {
+         deny all;
+        }
+        location / {
+        proxy_cache_key $scheme$host$request_method$request_uri;
+        proxy_cache STATIC_FILES_CACHE;
+        proxy_cache_valid  200 302  60m;
+        proxy_cache_valid  404      1m;
+        proxy_cache_use_stale   error timeout invalid_header;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Host $host;
+        add_header X-Proxy-Cache $upstream_cache_status;
+        add_header X-Host $host always;
+        add_header X-Origin 'kontron_lfc_test' always;
+        add_header X-Key '$scheme$host$request_method$request_uri' always;
+        proxy_no_cache $no_cache;
+        proxy_cache_bypass $no_cache;
+        proxy_http_version 1.1;
+        proxy_pass http://$backend_proxy;
+        break;
+        }
+  #SERVICE_CODE#-server: |
+    upstream up_#SERVICE_CODE# {
+      server lfc-bo-#SERVICE_CODE#-cluster.default.svc.cluster.local:#SERVICE_PORT#;
+      keepalive 1024;
+    }
+    server {
+      listen 80;
+      server_name #SERVICE_CODE#.lfc.mobiguider.cloud;
+      set $backend_proxy "up_#SERVICE_CODE#";
+      include includes/clients-shared.conf;
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lfc-nginx-service-#SERVICE_CODE#
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx-#SERVICE_CODE#
+  ports:
+    - protocol: TCP
+      port: #SERVICE_PORT#
+      targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lfc-rpxy-deployment-#SERVICE_CODE#
+  labels:
+    app: nginx-#SERVICE_CODE#
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-#SERVICE_CODE#
+  template:
+    metadata:
+      labels:
+        app: nginx-#SERVICE_CODE#
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19.6
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - mountPath: /etc/nginx # mount nginx-conf volumn to /etc/nginx
+          readOnly: true
+          name: nginx-conf-mnt
+        - mountPath: /var/log/nginx
+          name: nginx-log
+      volumes:
+      - name: nginx-conf-mnt
+        configMap:
+          name: nginx-lfc-#SERVICE_CODE# # place ConfigMap `nginx-conf` on /etc/nginx
+          items:
+            - key: nginx-http
+              path: nginx.conf
+            - key: clients-shared
+              path: includes/clients-shared.conf
+            - key: #SERVICE_CODE#-server
+              path: clients/#SERVICE_CODE#-server.conf
+      - name: nginx-log
+        emptyDir: {}
