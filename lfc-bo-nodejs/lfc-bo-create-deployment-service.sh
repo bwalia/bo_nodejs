@@ -18,9 +18,9 @@ sed "s^#SERVICE_CODE#^$1^g;s^#SERVICE_PORT#^$2^g" kube/lfc-bo.yaml > kube/lfc-bo
 sed "s^#SERVICE_CODE#^$1^g;s^#SERVICE_PORT#^$2^g" kube/mongo.yaml > kube/mongo-$1.yaml
 
 #/kube/kubectl delete -f kube/lfc-bo-$1.yaml
-kubectl scale --replicas=0 deployment/lfc-bo-$1
+/kube/kubectl scale --replicas=0 deployment/lfc-bo-$1
 
-#kubectl scale --replicas=0 deployment/lfc-bo-$1 && kubectl scale --replicas=2 deployment/lfc-bo-$1
+#kube/kubectl scale --replicas=0 deployment/lfc-bo-$1 && kube/kubectl scale --replicas=2 deployment/lfc-bo-$1
 
 /kube/kubectl apply -f kube/lfc-bo-$1.yaml
 /kube/kubectl apply -f kube/mongo-$1.yaml
@@ -32,6 +32,13 @@ sed "s^#SERVICE_CODE#^$1^g;s^#SERVICE_PORT#^$2^g" kube/lfc-rpxy-nginx.yml > kube
 
 /kube/kubectl apply -f kube/lfc-rpxy-nginx-$1.yaml
 
+/kube/kubectl rollout history deployment/lfc-bo-$1
+
 ## /kube/kubectl get deployments --all-namespaces
 ## /kube/kubectl get svc --all-namespaces
+
+#rollback
+
+#kubectl rollout undo deployment/app --to-revision=2
+
 
