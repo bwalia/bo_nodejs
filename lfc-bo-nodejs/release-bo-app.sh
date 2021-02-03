@@ -4,7 +4,7 @@
 #echo $2
 #APP_VERSION#
 
-sed "s^#APP_VERSION#^$1^g" views/input-template.pug > views/input.pug
+sed "s^#APP_VERSION#^$1^g" views/index-template.pug > views/index.pug
 
 docker build . -t bo-nodejs:latest
 
