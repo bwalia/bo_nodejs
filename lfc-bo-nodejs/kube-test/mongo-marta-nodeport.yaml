@@ -10,4 +10,4 @@ spec:
     targetPort: 27017
     name: mongo
   selector:
-    app: mongo-marta
+    app: mongo-deployments
